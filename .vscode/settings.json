@@ -1,0 +1,4 @@
+{
+    "python.pythonPath": "C:\\Users\\raviteja.kurva\\Anaconda3\\envs\\spark\\python.exe",
+    "azureML.defaultWorkspaceId": "/subscriptions/8f8adfd4-dbeb-4bfd-aeac-67202bca74de/resourceGroups/RG_MS_Analytics_DEV/providers/Microsoft.MachineLearningServices/workspaces/Machine_Learning"
+}
