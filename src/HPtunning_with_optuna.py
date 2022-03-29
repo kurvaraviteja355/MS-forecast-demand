@@ -20,7 +20,7 @@ from fbprophet.diagnostics import cross_validation
 from fbprophet.diagnostics import performance_metrics
 import itertools
 import optuna
-from continuous_data import create_store_test
+from src.continuous_data import create_store_test
 
 
 data = pd.read_csv('input_files/xbox_data.csv')
