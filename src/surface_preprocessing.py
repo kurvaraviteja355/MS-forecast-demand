@@ -89,7 +89,6 @@ def create_daily_test(data, max_date):
         test_data_template = pd.concat([test_data_template, temp_df]).reset_index(drop=True)
 
     ### Create the test dataset
-    predict_horizon = 14
     End_date = data['Sales Date'].max()
     TARGET = 'Rslr Sales Quantity'
     index_columns = ['Super Division', 'Business Unit','Rslr Sales Amount']
@@ -119,7 +118,7 @@ def surface_process(data):
     max_date = data['Sales Date'].max()
 
     # ## create the test_dataframe and concat 
-    test_data = create_test(data, max_date)
+    test_data = create_daily_test(data, max_date)
     test_data['Sales Date'] = pd.to_datetime(test_data['Sales Date'])
     test_data['black_week'] = np.where((test_data['Sales Date'].dt.month==11) & (test_data['Sales Date'].dt.day > 23), 1, 0)
     data = pd.concat([data, test_data])
@@ -127,8 +126,7 @@ def surface_process(data):
 
     ### get the promotional data
     promos = get_blob_connection('microsoft-all-files', 'Promos_data.csv')
-    promos = promos.rename(columns = {'Sales_Date' : 'Sales Date',
-                                        'Business unit': 'Business Unit'})
+    #promos = promos.rename(columns = {'Sales_Date' : 'Sales Date','Business unit': 'Business Unit'})
     promos['Sales Date'] = pd.to_datetime(promos['Sales Date'])
     ### convert the promos to weekly data
     promos = (promos.set_index("Sales Date").groupby(['Business Unit',pd.Grouper(freq='M')])["Discount_amount"].sum().reset_index())
