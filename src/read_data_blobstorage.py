@@ -1,6 +1,17 @@
 import numpy as  np
 import pandas as pd
 from azure.storage.blob import ContentSettings, ContainerClient
+from pyspark.sql import SparkSession
+from pyspark import SparkContext, SparkConf
+import pyspark
+
+
+
+spark = SparkSession.builder\
+        .appName('surface_monthly_forecast') \
+        .config('spark.sql.execution.arrow.pyspark.enabled', True) \
+        .config('spark.sql.execution.arrow.enabled', True) \
+        .getOrCreate()
 
 ### function to get the data from Azure blob storgae into the Azure databricks
 def get_blob_connection(container_name, blob_file_name):
@@ -9,7 +20,7 @@ def get_blob_connection(container_name, blob_file_name):
     storage_account_key = 'BVxcnzKTOFau0hZqwhh2QgSCSkxdWJFSldphrvWq8BCL2XgJcZbFQyBirJavx759UGcQrAUgdBmnoSZxtCKkZQ=='
     container = 'mircosoft-all-files'
     spark.conf.set(f"fs.azure.account.key.{storage_account_name}.blob.core.windows.net", storage_account_key)
-    df = spark.read.option('haeder', 'true').option('inferschema', 'true'). option('delimiter', ',')\
+    df = spark.read.option('header', 'true').option('inferschema', 'true'). option('delimiter', ',')\
     .csv(f"wasbs://{container_name}@{storage_account_name}.blob.core.windows.net/{blob_file_name}")
     ### convert the data into pandas dataframe 
     pandas_df = df.toPandas()
@@ -31,5 +42,7 @@ def update_blobcontainer_files(file_name, pd_dataframe):
     with open("/dbfs/FileStore/tables/{file_name}.csv", 'rb') as f:
         container_client.upload(f)
         print(f"{f} uploaded to  blob storage")
+        
+    spark.stop()
 
 

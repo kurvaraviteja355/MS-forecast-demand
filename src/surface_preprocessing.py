@@ -7,6 +7,9 @@ import calendar
 from datetime import datetime
 from src.continuous_data import melt_data
 from src.read_data_blobstorage import get_blob_connection, update_blobcontainer_files
+from pyspark.sql import SparkSession
+from pyspark import SparkContext, SparkConf
+import pyspark
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -112,6 +115,12 @@ def create_daily_test(data, max_date):
 
 def surface_process(data):
     
+    spark = SparkSession.builder\
+        .appName('surface_monthly_forecast') \
+        .config('spark.sql.execution.arrow.pyspark.enabled', True) \
+        .config('spark.sql.execution.arrow.enabled', True) \
+        .getOrCreate()
+    
     #convert the sales date into datetime format 
     data['Sales Date'] = pd.to_datetime(data['Sales Date'])
     data = data.drop_duplicates()
@@ -119,7 +128,7 @@ def surface_process(data):
     max_date = data['Sales Date'].max()
 
     # ## create the test_dataframe and concat 
-    test_data = create_test(data, max_date)
+    test_data = create_daily_test(data, max_date)
     test_data['Sales Date'] = pd.to_datetime(test_data['Sales Date'])
     test_data['black_week'] = np.where((test_data['Sales Date'].dt.month==11) & (test_data['Sales Date'].dt.day > 23), 1, 0)
     data = pd.concat([data, test_data])
@@ -127,8 +136,7 @@ def surface_process(data):
 
     ### get the promotional data
     promos = get_blob_connection('microsoft-all-files', 'Promos_data.csv')
-    promos = promos.rename(columns = {'Sales_Date' : 'Sales Date',
-                                        'Business unit': 'Business Unit'})
+    #promos = promos.rename(columns = {'Sales_Date' : 'Sales Date', 'Business unit': 'Business Unit'})
     promos['Sales Date'] = pd.to_datetime(promos['Sales Date'])
     ### convert the promos to weekly data
     promos = (promos.set_index("Sales Date").groupby(['Business Unit',pd.Grouper(freq='M')])["Discount_amount"].sum().reset_index())

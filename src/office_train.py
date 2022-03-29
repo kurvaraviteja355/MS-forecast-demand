@@ -68,7 +68,7 @@ def office_train(data, train_end_date):
     
     ##### city-wise prophet function 
     @pandas_udf( result_schema, PandasUDFType.GROUPED_MAP )
-    def forecast_sales(store_pd, train_end):
+    def forecast_sales(store_pd):
         
         model = Prophet(interval_width=0.95, holidays = lock_down)
         model.add_country_holidays(country_name='DE')
@@ -77,8 +77,8 @@ def office_train(data, train_end_date):
 
         black_week = dict(zip(store_pd['ds'], store_pd['black_week']))
         christmas = dict(zip(store_pd['ds'], store_pd['christmas']))
-        train = store_pd[store_pd['ds']<= train_end] ##'2022-02-28'
-        future_pd = store_pd[store_pd['ds']> train_end].set_index('ds')
+        train = store_pd[store_pd['ds']<= train_end_date] ##'2022-02-28'
+        future_pd = store_pd[store_pd['ds']> train_end_date].set_index('ds')
         train['date_index'] = train['ds']
         train['date_index'] = pd.to_datetime(train['date_index'])
         train = train.set_index('date_index')

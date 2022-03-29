@@ -1,8 +1,8 @@
 import pandas as pd 
 import numpy as np
 from datetime import datetime
-from continuous_data import melt_data
-from reduce_mem_usage import  reduce_mem_usage
+from src.continuous_data import melt_data, create_store_test
+from src.reduce_mem_usage import  reduce_mem_usage
 import warnings
 warnings.filterwarnings("ignore")
 pd.options.mode.chained_assignment = None
@@ -88,10 +88,13 @@ def preprocess_office():
     #### Return the dataframe to the next task
     data.to_csv(r'input_files/office_data.csv', index=False)
 
+    return data 
+
+def office_process(data):
+
     #convert the sales date into datetime format 
     data['Sales Date'] = pd.to_datetime(data['Sales Date'])
     data = data.drop_duplicates()
-    #data = (data.set_index("Sales Date").groupby(['Reseller City','Super Division', 'Business Unit', pd.Grouper(freq='W')])["Rslr Sales Quantity", "Rslr Sales Amount"].sum().astype(int).reset_index())
     data['black_week'] = np.where((data['Sales Date'].dt.month==11) & (data['Sales Date'].dt.day > 23), 1, 0)
     max_date = data['Sales Date'].max()
     
