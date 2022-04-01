@@ -41,7 +41,7 @@ def surface_train(data, train_end_date):
     sql = 'SELECT Store_names, Reseller_City, Super_Division, Business_Unit, black_week, promos, ds, sum(Rslr_Sales_Qunatity) as y FROM sales GROUP BY Store_names, Reseller_City, Super_Division, Business_Unit, black_week, promos, ds ORDER BY Store_names, Reseller_City,  Super_Division,  Business_Unit, ds'
     sdf.explain()
     sdf.rdd.getNumPartitions()
-    print('Number of partitions': sdf.rdd.getNumPartitions())
+    print('Number of partitions :', sdf.rdd.getNumPartitions())
     spark.sql("select Store_names, Reseller_City,  Business_Unit, count(*) from sales group by Store_names, Reseller_City, Business_Unit order by Reseller_City, Business_Unit").show()
     spark.sql(sql).show()
     store_part = (spark.sql(sql).repartition(spark.sparkContext.defaultParallelism, ['Store_names','Business_Unit'])).cache()

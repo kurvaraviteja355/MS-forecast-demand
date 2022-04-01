@@ -9,10 +9,10 @@ pd.options.mode.chained_assignment = None
 pd.set_option('display.float_format', '{:.2f}'.format)
 
 
-def preprocess_office():
+def preprocess_office(first_conatiner, second_conatiner, first_file, second_file, matchlist_file):
     
-    data = pd.read_excel('input_files/new_data.xlsx')
-    df = pd.read_csv('input_files/office_store.csv')
+    data = get_blob_connection(second_conatiner, second_file)
+    df = get_blob_connection(first_conatiner, first_file)
 
     closed_stores = ['Saturn Connect Trier', 'Media Markt Heilbronn 2','Saturn Schweinfurt Schrammstraße', 'Saturn Connect Köln',
                     'Saturn Stuttgart-Hbf', 'Saturn-Berlin Clayallee','Saturn Mönchengladbach - Stresemannstraße', 'Saturn Lübeck',
@@ -26,7 +26,7 @@ def preprocess_office():
     df = df.loc[~df['Store_names'].isin(closed_stores)].reset_index(drop=True)
     stores_eligiable = list(df['Store_names'].unique())
     df['Sales Date'] = pd.to_datetime(df['Sales Date'])
-    stores_uniqueID = pd.read_csv('input_files/MSFT_Matchliste.csv',sep=';', error_bad_lines=False)
+    stores_uniqueID = get_blob_connection(first_conatiner, matchlist_file)
     dictn = dict(zip(stores_uniqueID['Org als Text'], stores_uniqueID['Unique Name (Masterlist)']))
     data['Store_names'] = data['Reseller Organization ID'].map(dictn)
 
@@ -85,10 +85,20 @@ def preprocess_office():
 
     #### append the new data with old data 
     data = pd.concat([df, data])
+    
+    
     #### Return the dataframe to the next task
-    data.to_csv(r'input_files/office_data.csv', index=False)
+    df_quantity = melt_data(data, 'Rslr Sales Quantity')
+    df_Amount = melt_data(data, 'Rslr Sales Amount')
+    data = pd.merge(df_quantity, df_Amount, on=['Sales Date', 'Store_names','Business Unit'], how='left')
+    data['Super Division'] = data['Business Unit'].map(Super_division)
+    data['Product Division'] = data['Business Unit'].map(product_division)
+    data['Reseller Postal Code'] = data['Store_names'].map(postalcodes)
+    data['Reseller City'] = data['Store_names'].map(Reseller_city)
 
     return data 
+
+
 
 def office_process(data):
 
@@ -109,14 +119,14 @@ def office_process(data):
     data['black_week'] = np.where(data['Sales Date'].dt.month==11, 1, 0)
     data['black_week'] = np.where((data['Business Unit']=='M365') & (data['Sales Date'].dt.month==11) & (data['Sales Date'].dt.year==2017), 1, 0)
     data['black_week'] = np.where((data['Business Unit']=='Office Standard') & (data['Sales Date'].dt.month==11) & (data['Sales Date'].dt.year==2019|2020), 1, data['black_week'])
-    data['christmas'] = np.where((data['Business Unit']=='M365') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2017), 1, 0)
-    data['christmas'] = np.where((data['Business Unit']=='M365') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2019), 2, data['christmas'])
-    data['christmas'] = np.where((data['Business Unit']=='M365') & (data['Sales Date'].dt.month==3) & (data['Sales Date'].dt.year==2021), 1, data['christmas'])
-    data['christmas'] = np.where((data['Business Unit']=='Office Standard') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2017|2018|2019), 1, data['christmas'])
-    data['christmas'] = np.where((data['Business Unit']=='Office Standard') & (data['Sales Date'].dt.month==9) & (data['Sales Date'].dt.year==2019), 1, data['christmas'])
-    data['christmas'] = np.where((data['Business Unit']=='Office Standard') & (data['Sales Date'].dt.month==9) & (data['Sales Date'].dt.year==2021), 2, data['christmas'])
-    data['christmas'] = np.where((data['Business Unit']=='Office Standard') & (data['Sales Date'].dt.month==4) & (data['Sales Date'].dt.year==2019), 1, data['christmas'])
-    data['christmas'] = np.where((data['Business Unit']=='Office Standard') & (data['Sales Date'].dt.month==7|9) & (data['Sales Date'].dt.year==2019), 1, data['christmas'])
+    data['black_week'] = np.where((data['Business Unit']=='M365') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2017), 1, data['black_week'])
+    data['black_week'] = np.where((data['Business Unit']=='M365') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2019), 2, data['black_week'])
+    data['black_week'] = np.where((data['Business Unit']=='M365') & (data['Sales Date'].dt.month==3) & (data['Sales Date'].dt.year==2021), 1, data['black_week'])
+    data['black_week'] = np.where((data['Business Unit']=='Office Standard') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2017|2018|2019), 1, data['black_week'])
+    data['black_week'] = np.where((data['Business Unit']=='Office Standard') & (data['Sales Date'].dt.month==9) & (data['Sales Date'].dt.year==2019), 1, data['black_week'])
+    data['black_week'] = np.where((data['Business Unit']=='Office Standard') & (data['Sales Date'].dt.month==9) & (data['Sales Date'].dt.year==2021), 2, data['black_week'])
+    data['black_week'] = np.where((data['Business Unit']=='Office Standard') & (data['Sales Date'].dt.month==4) & (data['Sales Date'].dt.year==2019), 1, data['black_week'])
+    data['black_week'] = np.where((data['Business Unit']=='Office Standard') & (data['Sales Date'].dt.month==7|9) & (data['Sales Date'].dt.year==2019), 1, data['black_week'])
 
     return data
 

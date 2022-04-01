@@ -24,6 +24,7 @@ warnings.filterwarnings("ignore")
 
 # COMMAND ----------
 
+
 def surface_revenue_forecast(data, train_date):
 
     sdf = spark.createDataFrame(data)
@@ -35,12 +36,12 @@ def surface_revenue_forecast(data, train_date):
             .withColumnRenamed('Business Unit', 'Business_Unit')
 
     sdf.printSchema()
-    sdf.createOrReplaceTempView('surface_sales')
+    sdf.createOrReplaceTempView('surface_revenue')
     #spark.sql("select Store_names, Reseller_City,  Business_Unit, count(*) from surface_revenue group by Store_names, Reseller_City, Business_Unit order by Reseller_City, Business_Unit").show()
-    sql = 'SELECT Store_names, Reseller_City, Super_Division, Business_Unit, black_week, promos, ds, sum(Rslr_Sales_Qunatity) as y FROM surface_sales GROUP BY Store_names, Reseller_City, Super_Division, Business_Unit, black_week, promos, ds ORDER BY Store_names, Reseller_City,  Super_Division,  Business_Unit, ds'
+    sql = 'SELECT Store_names, Reseller_City, Super_Division, Business_Unit, black_week, promos, ds, sum(Rslr_Sales_Amount) as y FROM surface_revenue GROUP BY Store_names, Reseller_City, Super_Division, Business_Unit, black_week, promos, ds ORDER BY Store_names, Reseller_City,  Super_Division,  Business_Unit, ds'
     sdf.explain()
     sdf.rdd.getNumPartitions()
-    spark.sql("select Store_names, Reseller_City,  Business_Unit, count(*) from surface_sales group by Store_names, Reseller_City, Business_Unit order by Reseller_City, Business_Unit").show()
+    spark.sql("select Store_names, Reseller_City,  Business_Unit, count(*) from surface_revenue group by Store_names, Reseller_City, Business_Unit order by Reseller_City, Business_Unit").show()
     spark.sql(sql).show()
     store_part = (spark.sql(sql).repartition(spark.sparkContext.defaultParallelism, ['Store_names','Business_Unit'])).cache()
     store_part.explain()
@@ -130,14 +131,26 @@ def surface_revenue_forecast(data, train_date):
 
 data = surface_preprocessor('microsoft-all-files', 'new-data', 'surface_data.csv', 'MS-sales-march.csv', 'MSFT_Matchliste.csv')
 
+# COMMAND ----------
+
+data.nunique()
 
 # COMMAND ----------
 
-data.head()
+data.shape
 
 # COMMAND ----------
+
+3462330
+
+# COMMAND ----------
+
 
 data = surface_process(data)
+
+# COMMAND ----------
+
+data['Sales Date'].max()
 
 # COMMAND ----------
 
@@ -150,7 +163,11 @@ validate_score(results, '2022-03-31')
 # COMMAND ----------
 
 final_df = (results.set_index("ds").groupby(['Store_names','Reseller_City', 'Business_Unit', pd.Grouper(freq='M')])[ "y", "yhat"].sum().astype(int).reset_index())
-final_df = fin_df.groupby(['ds', 'Business_Unit']).sum().reset_index()[['ds', 'y', 'yhat']].reset_index(drop=True)
+final_df = final_df.groupby(['ds', 'Business_Unit']).sum().reset_index()[['ds', 'Business_Unit', 'y', 'yhat']].reset_index(drop=True)
+
+# COMMAND ----------
+
+final_df.tail(10)
 
 # COMMAND ----------
 
@@ -158,10 +175,8 @@ import plotly.graph_objs as go
 item=final_df['Business_Unit'].unique()
 
 def plot_fig(df, item):
-    print(item)
     fig = go.Figure()
     # Create and style traces
-    forecast = df.loc[df['Store_names'] == item]
     print(item)
     forecast = df.loc[df['Business_Unit'] == item]
     fig.add_trace(go.Scatter(x=forecast['ds'], y=forecast['y'], name='Actual',))
@@ -170,11 +185,11 @@ def plot_fig(df, item):
 
 # COMMAND ----------
 
-plot_fig(final_df, item[1])
+plot_fig(final_df, item[0])
 
 # COMMAND ----------
 
-plot_fig(final_df, item[0])
+plot_fig(final_df, item[1])
 
 # COMMAND ----------
 

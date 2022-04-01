@@ -14,13 +14,18 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-def surface_preprocessor():
 
-    data = pd.read_excel('input_files/new_data.xlsx')
-    df = pd.read_csv('input_files/Surface_data.csv')
+
+
+
+def surface_preprocessor(first_conatiner, second_conatiner, first_file, second_file, matchlist_file):
+    
+
+    data = get_blob_connection(second_conatiner, second_file)
+    df = get_blob_connection(first_conatiner, first_file)
     eligiable_stores = list(df['Store_names'].unique())
     df['Sales Date'] = pd.to_datetime(df['Sales Date'])
-    stores_uniqueID = pd.read_csv('input_files/MSFT_Matchliste.csv',sep=';', error_bad_lines=False)
+    stores_uniqueID = get_blob_connection(first_conatiner, matchlist_file)
     dictn = dict(zip(stores_uniqueID['Org als Text'], stores_uniqueID['Unique Name (Masterlist)']))
     data['Store_names'] = data['Reseller Organization ID'].map(dictn)
     data['Store_names'].replace({'Media Markt Heilbronn 2': 'Media Markt Heilbronn',
@@ -34,6 +39,7 @@ def surface_preprocessor():
 
     data = data[columns]
     data['Sales Date'] = pd.to_datetime(data['Sales Date'])
+    data = data.loc[data['Sales Date'] > df['Sales Date'].max()].reset_index(drop=True)
     #### Select the office products
     surface_products = ['EDG Managed - Surface Devices']
     data = data.loc[data['Super Division'].isin(surface_products)].reset_index(drop=True)
@@ -69,7 +75,14 @@ def surface_preprocessor():
     data['Reseller City'] = data['Store_names'].map(Reseller_city)
     data = pd.concat([df, data])
     data = data.loc[~data['Store_names'].isin(closed_stores)].reset_index(drop=True)
-    data.to_csv(r"input_files/surface_data.csv", index=False)
+############################################################################################################################ 
+    df_quantity = melt_data(data, 'Rslr Sales Quantity')
+    df_Amount = melt_data(data, 'Rslr Sales Amount')
+    data = pd.merge(df_quantity, df_Amount, on=['Sales Date', 'Store_names','Business Unit'], how='left')
+    data['Super Division'] = data['Business Unit'].map(Super_division)
+    data['Reseller Postal Code'] = data['Store_names'].map(postalcodes)
+    data['Reseller City'] = data['Store_names'].map(Reseller_city)
+    #data.to_csv(r"input_files/surface_data.csv", index=False)
     return data
 
 
@@ -115,11 +128,6 @@ def create_daily_test(data, max_date):
 
 def surface_process(data):
     
-    spark = SparkSession.builder\
-        .appName('surface_monthly_forecast') \
-        .config('spark.sql.execution.arrow.pyspark.enabled', True) \
-        .config('spark.sql.execution.arrow.enabled', True) \
-        .getOrCreate()
     
     #convert the sales date into datetime format 
     data['Sales Date'] = pd.to_datetime(data['Sales Date'])
@@ -133,6 +141,10 @@ def surface_process(data):
     test_data['black_week'] = np.where((test_data['Sales Date'].dt.month==11) & (test_data['Sales Date'].dt.day > 23), 1, 0)
     data = pd.concat([data, test_data])
     data['Sales Date'] = pd.to_datetime(data['Sales Date'])
+    
+    ## convert the data into monthly data 
+    
+    data = (data.set_index("Sales Date").groupby(['Store_names','Reseller City','Super Division','Business Unit', pd.Grouper(freq='M')])["Rslr Sales Quantity", "Rslr Sales Amount"].sum().astype(int).reset_index())
 
     ### get the promotional data
     promos = get_blob_connection('microsoft-all-files', 'Promos_data.csv')
@@ -147,7 +159,7 @@ def surface_process(data):
     data = pd.merge(data, promos, on=['Sales Date', 'Business Unit'], how='left')
     data['promos'] = data['promos'].fillna(0)
     data['black_week'] = np.where(data['Sales Date'].dt.month==11, 1, 0)
-    data['black_week'] = np.where((data['Business Unit']=='Surface Pro') & (data['Sales Date'].dt.month==11) & (data['Sales Date'].dt.year== 2017 |2018 |2019), 1, 0)
+    data['black_week'] = np.where((data['Business Unit']=='Surface Pro') & (data['Sales Date'].dt.month==11) & (data['Sales Date'].dt.year== 2017 |2018 |2019), 1, data['black_week'])
     data['black_week'] = np.where((data['Business Unit']=='Surface Pro') & (data['Sales Date'].dt.month==11) & (data['Sales Date'].dt.year==2020), 2, data['black_week'])
     data['black_week'] = np.where((data['Business Unit']=='Surface Go') & (data['Sales Date'].dt.month==11) & (data['Sales Date'].dt.year==2019 |2021), 1, data['black_week'])
     data['black_week'] = np.where((data['Business Unit']=='Surface Book') & (data['Sales Date'].dt.month==11) & (data['Sales Date'].dt.year==2018 |2019), 1, data['black_week'])

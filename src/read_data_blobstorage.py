@@ -8,7 +8,7 @@ import pyspark
 
 
 spark = SparkSession.builder\
-        .appName('surface_monthly_forecast') \
+        .appName('app') \
         .config('spark.sql.execution.arrow.pyspark.enabled', True) \
         .config('spark.sql.execution.arrow.enabled', True) \
         .getOrCreate()
@@ -18,13 +18,33 @@ def get_blob_connection(container_name, blob_file_name):
 
     storage_account_name = 'sachousedevne'
     storage_account_key = 'BVxcnzKTOFau0hZqwhh2QgSCSkxdWJFSldphrvWq8BCL2XgJcZbFQyBirJavx759UGcQrAUgdBmnoSZxtCKkZQ=='
-    container = 'mircosoft-all-files'
+    
     spark.conf.set(f"fs.azure.account.key.{storage_account_name}.blob.core.windows.net", storage_account_key)
-    df = spark.read.option('header', 'true').option('inferschema', 'true'). option('delimiter', ',')\
-    .csv(f"wasbs://{container_name}@{storage_account_name}.blob.core.windows.net/{blob_file_name}")
-    ### convert the data into pandas dataframe 
-    pandas_df = df.toPandas()
+    
+    if container_name == 'new-data':
+        
+        df = spark.read.option('header', 'true').option('inferschema', 'true'). option('delimiter', ',')\
+        .csv(f"wasbs://{container_name}@{storage_account_name}.blob.core.windows.net/{blob_file_name}")
+        ### convert the data into pandas dataframe 
+        pandas_df = df.toPandas()
+        
+    elif blob_file_name == 'MSFT_Matchliste.csv':
+        
+        df = spark.read.option('header', 'true').option('inferschema', 'true'). option('delimiter', ',').option('sep', ';').option('error_bad_lines', 'false')\
+        .csv(f"wasbs://{container_name}@{storage_account_name}.blob.core.windows.net/{blob_file_name}")
+        ### convert the data into pandas dataframe 
+        pandas_df = df.toPandas()
+    
+    else:
+        
+        df = spark.read.option('header', 'true').option('inferschema', 'true'). option('delimiter', ',')\
+        .csv(f"wasbs://{container_name}@{storage_account_name}.blob.core.windows.net/{blob_file_name}")
+        ### convert the data into pandas dataframe 
+        pandas_df = df.toPandas()    
+        
     return pandas_df 
+
+##################################################################################################
 
 def update_blobcontainer_files(file_name, pd_dataframe):
 
@@ -43,6 +63,33 @@ def update_blobcontainer_files(file_name, pd_dataframe):
         container_client.upload(f)
         print(f"{f} uploaded to  blob storage")
         
-    spark.stop()
+###################################################################################################       
+        
+def read_excel_blob(container_name, blob_file_name):
+    
+    
+    SasURL = "https://sachousedevne.blob.core.windows.net/new-data?sp=r&st=2022-04-01T10:05:37Z&se=2022-04-01T18:05:37Z&spr=https&sv=2020-08-04&sr=c&sig=n4HsXeLw4ixMrBBtAuI%2FKdzmjxSwjoNGkHN2gI6CXtA%3D"
+    indQuestionMark = SasURL.index('?')
+    SasKey = SasURL[indQuestionMark:len(SasURL)]
 
+    storage_account_name = 'sachousedevne'
+    storage_account_key = 'BVxcnzKTOFau0hZqwhh2QgSCSkxdWJFSldphrvWq8BCL2XgJcZbFQyBirJavx759UGcQrAUgdBmnoSZxtCKkZQ=='
+    
+    MountPoint = "/mnt/blob-storage"
+    dbutils.fs.mount(
+    source = 'wasbs://%s@%s.blob.core.windows.net/' % (container_name, storage_account_name),
+    mount_point = MountPoint,
+    extra_configs = {"fs.azure.sas.%s.%s.blob.core.windows.net" % (container_name, storage_account_name) : "%s" % SasKey}
+    ) 
+    df = (spark.read
+    .format('com.crealytics.spark.excel')
+    .option('header', 'true')
+    .option('inferSchema', 'true').option('addColorColumns', 'false')
+    .load('/mnt/blob-storage/MS-sales-march.xlsx'))
+
+    pandas_df = df.toPandas()
+    return pandas_df 
+        
+###############################################################################################
+        
 

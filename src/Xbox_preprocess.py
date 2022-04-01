@@ -4,19 +4,20 @@ import os
 import sys
 import glob
 from datetime import datetime
-from continuous_data import melt_data
+from src.read_data_blobstorage import get_blob_connection
+from src.continuous_data import melt_data, create_store_test
 import warnings
 warnings.filterwarnings("ignore")
 
 
-def Xbox_preprocess():
+def Xbox_preprocess(first_conatiner, second_conatiner, first_file, second_file, matchlist_file):
 
     ## read the new data from databse 
-    data = pd.read_excel('input_files/new_data.xlsx')
-    df = pd.read_csv('input_files/Xbox_store.csv')
+    data = get_blob_connection(second_conatiner, second_file)
+    df = get_blob_connection(first_conatiner, first_file)
     df['Sales Date'] = pd.to_datetime(df['Sales Date'])
     Stores_eligiable = list(df['Store_names'].unique())
-    stores_uniqueID = pd.read_csv('input_files/MSFT_Matchliste.csv',sep=';', error_bad_lines=False)
+    stores_uniqueID = get_blob_connection(first_conatiner, matchlist_file)
     dictn = dict(zip(stores_uniqueID['Org als Text'], stores_uniqueID['Unique Name (Masterlist)']))
     data['Store_names'] = data['Reseller Organization ID'].map(dictn)
     data = data[data['Reseller Country']=='Germany']
@@ -69,31 +70,42 @@ def Xbox_preprocess():
     data['Reseller City'] = data['Store_names'].map(Reseller_city)
 
     #### append the new data with old data 
+    data = pd.concat([df, data])
+    ######################################################
+    df_quantity = melt_data(data, 'Rslr Sales Quantity')
+    df_Amount = melt_data(data, 'Rslr Sales Amount')
+    data = pd.merge(df_quantity, df_Amount, on=['Sales Date', 'Store_names','Business Unit'], how='left')
+    data['Super Division'] = data['Business Unit'].map(Super_division)
+    data['Product Division'] = data['Business Unit'].map(product_division)
+    data['Reseller Postal Code'] = data['Store_names'].map(postalcodes)
+    data['Reseller City'] = data['Store_names'].map(Reseller_city)
+    
+    return data 
 
-    df = pd.concat([df, data])
-    #### Return the dataframe to the next task
-    df.to_csv(r'input_files/Xbox_data.csv', index=False)
+def xbox_process(data):
+    
+    #convert the sales date into datetime format 
+    data['Sales Date'] = pd.to_datetime(data['Sales Date'])
+    data = data.drop_duplicates()
     data['black_week'] = np.where((data['Sales Date'].dt.month==11) & (data['Sales Date'].dt.day > 23), 1, 0)
-
     max_date = data['Sales Date'].max()
     # ## create the test_dataframe 
     test_data = create_store_test(data, max_date)
     test_data['Sales Date'] = pd.to_datetime(test_data['Sales Date'])
     test_data['black_week'] = np.where((test_data['Sales Date'].dt.month==11) & (test_data['Sales Date'].dt.day > 23), 1, 0)
     data = pd.concat([data, test_data])
-    data['Sales Date'] = pd.to_datetime(data['Sales Date'])
+    
     data = (data.set_index("Sales Date").groupby(['Store_names','Reseller City','Super Division', 'Product Division','Business Unit', pd.Grouper(freq='M')])["Rslr Sales Quantity", "Rslr Sales Amount"].sum().astype(int).reset_index())
     data['black_week'] = np.where(data['Sales Date'].dt.month==11, 1, 0)
     data['black_week'] = np.where((data['Business Unit']=='Xbox Series S') & (data['Sales Date'].dt.month==11) & (data['Sales Date'].dt.year==2017 |2018 |2019), 2, data['black_week'])
     data['black_week'] = np.where((data['Business Unit']=='Xbox Series X') & (data['Sales Date'].dt.month==11) & (data['Sales Date'].dt.year==2020), 2, data['black_week'])
     data['black_week'] = np.where((data['Business Unit']=='Xbox Series X') & (data['Sales Date'].dt.month==11) & (data['Sales Date'].dt.year==2021), 0, data['black_week'])
     data['black_week'] = np.where((data['Business Unit']=='Game Pass PC') & (data['Sales Date'].dt.month==11), 0, data['black_week'])
-
-    data['christmas'] = np.where((data['Business Unit']=='Xbox Series S') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2017), 2, 0)
-    data['christmas'] = np.where((data['Business Unit']=='Xbox Series S') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2018 |2019 |2021), 1, data['christmas'])
-    data['christmas'] = np.where((data['Business Unit']=='Xbox Series X') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2020 |2021), 1, data['christmas'])
-    data['christmas'] = np.where((data['Business Unit']=='Game Pass PC') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2017), 2, data['christmas'])
-    data['christmas'] = np.where((data['Business Unit']=='Game Pass PC') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2018 |2019), 2, data['christmas'])
+    data['black_week'] = np.where((data['Business Unit']=='Xbox Series S') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2017), 2, data['black_week'])
+    data['black_week'] = np.where((data['Business Unit']=='Xbox Series S') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2018 |2019 |2021), 1, data['black_week'])
+    data['black_week'] = np.where((data['Business Unit']=='Xbox Series X') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2020 |2021), 1, data['black_week'])
+    data['black_week'] = np.where((data['Business Unit']=='Game Pass PC') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2017), 2, data['black_week'])
+    data['black_week'] = np.where((data['Business Unit']=='Game Pass PC') & (data['Sales Date'].dt.month==12) & (data['Sales Date'].dt.year==2018 |2019), 2, data['black_week'])
 
     return data 
     
